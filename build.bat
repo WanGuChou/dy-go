@@ -6,6 +6,22 @@ echo  Packet Capture Tool - Build Script
 echo ========================================
 echo.
 
+REM 切换到脚本所在目录
+cd /d "%~dp0"
+
+REM 检查 main.go 是否存在
+if not exist "main.go" (
+    echo ❌ Error: main.go not found!
+    echo Current directory: %CD%
+    echo.
+    echo Please run this script from the project root directory.
+    pause
+    exit /b 1
+)
+
+echo Current directory: %CD%
+echo.
+
 REM 检查GCC是否安装
 echo [1/4] Checking GCC...
 where gcc >nul 2>&1

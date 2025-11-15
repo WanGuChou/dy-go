@@ -4,6 +4,18 @@ REM 开发模式运行 Packet Capture Tool
 echo Starting Packet Capture Tool in development mode...
 echo.
 
+REM 切换到脚本所在目录
+cd /d "%~dp0"
+
+REM 检查 main.go 是否存在
+if not exist "main.go" (
+    echo ❌ Error: main.go not found in current directory!
+    echo Current directory: %CD%
+    echo.
+    pause
+    exit /b 1
+)
+
 REM 设置CGO环境变量（Fyne需要）
 set CGO_ENABLED=1
 
