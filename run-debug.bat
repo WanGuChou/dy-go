@@ -47,16 +47,24 @@ echo.
 
 echo Running in debug mode with detailed logs...
 echo.
+echo NOTE: First-time compilation may take 2-5 minutes.
+echo       Please be patient...
+echo.
+echo If no output appears after 5 minutes:
+echo   1. Press Alt+Tab to find the GUI window
+echo   2. Check system tray (bottom-right corner)
+echo   3. Check Task Manager for go.exe process
+echo.
 echo ----------------------------------------
-echo Application Output:
+echo Application Output (waiting for output...):
 echo ----------------------------------------
 echo.
 
-REM 运行程序，日志会显示在终端
-go run main.go
+REM 运行程序，强制刷新输出
+go run main.go 2>&1
 
 echo.
 echo ----------------------------------------
-echo Program exited
+echo Program exited (status: %ERRORLEVEL%)
 echo ----------------------------------------
 pause
