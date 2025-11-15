@@ -17,25 +17,45 @@
 
 ## 📋 系统要求
 
-- Windows 10/11
-- Go 1.21 或更高版本
-- 管理员权限（仅证书安装时需要）
+- **操作系统**: Windows 10/11
+- **Go 版本**: 1.21 或更高
+- **GCC 编译器**: TDM-GCC 或 MinGW-w64（**必需**，用于 Fyne GUI）
+- **管理员权限**: 仅证书安装时需要
+
+⚠️ **重要**: 如果遇到编译错误，请查看 [Windows 环境配置指南](docs/WINDOWS_SETUP.md)
 
 ## 🚀 快速开始
+
+### 前置要求
+
+在开始之前，请先运行环境检查：
+
+```bash
+check-env.bat
+```
+
+如果提示缺少 GCC，请参考 [Windows 环境配置指南](docs/WINDOWS_SETUP.md)。
 
 ### 安装依赖
 
 ```bash
+install-deps.bat
+# 或
 go mod download
 ```
 
 ### 编译运行
 
 ```bash
-# 开发模式运行
-go run main.go
+# 方式 1: 开发模式（推荐，可看到日志）
+run-dev.bat
 
-# 编译可执行文件
+# 方式 2: 编译后运行
+build.bat
+packet-capture-debug.exe
+
+# 方式 3: 手动编译
+set CGO_ENABLED=1
 go build -o packet-capture.exe
 ```
 
@@ -123,12 +143,26 @@ packet-capture-tool/
 
 ## ⚠️ 注意事项
 
-1. **证书安装**: 首次运行时需要管理员权限安装根证书
-2. **代理设置**: 使用完毕后记得禁用系统代理，避免影响正常网络访问
-3. **内存限制**: 默认在内存中保留最新的 10000 条请求记录
-4. **WebSocket**: 当前版本对 WebSocket 的支持有限
+1. **GCC 编译器**: Fyne GUI 需要 GCC，必须先安装（见 [WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)）
+2. **证书安装**: 首次运行时需要管理员权限安装根证书
+3. **代理设置**: 使用完毕后记得禁用系统代理，避免影响正常网络访问
+4. **内存限制**: 默认在内存中保留最新的 10000 条请求记录
+5. **WebSocket**: 当前版本对 WebSocket 的支持有限
 
 ## 🐛 故障排除
+
+### 编译错误: build constraints exclude all Go files
+
+**错误信息**:
+```
+build constraints exclude all Go files in github.com\go-gl\gl
+```
+
+**原因**: 缺少 GCC 编译器
+
+**解决方案**: 
+1. 安装 TDM-GCC: https://jmeubank.github.io/tdm-gcc/
+2. 查看详细指南: [WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)
 
 ### 证书安装失败
 - 确保以管理员权限运行程序
@@ -198,6 +232,7 @@ packet-capture-tool/
 
 ## 🎓 学习资源
 
+- [Windows 环境配置](docs/WINDOWS_SETUP.md) - ⭐ 解决 GCC/编译问题
 - [快速入门指南](docs/QUICKSTART.md) - 5分钟快速上手
 - [系统架构文档](docs/ARCHITECTURE.md) - 深入了解系统设计
 - [构建指南](docs/BUILD.md) - 编译和构建详解
