@@ -122,18 +122,25 @@ func (a *App) onExit() {
 
 // Run 运行应用程序
 func (a *App) Run() {
+	log.Println("Starting proxy server...")
+	
 	// 启动代理服务器
 	if err := a.proxyServer.Start(); err != nil {
 		log.Fatalf("Failed to start proxy server: %v", err)
 	}
-
-	log.Printf("Proxy server started on port %d", a.config.GetProxyPort())
-	log.Printf("HTTPS decryption: %v", a.config.GetHTTPSDecrypt())
-	log.Printf("Certificate fingerprint: %s", a.certManager.GetCertFingerprint())
-
+	
+	log.Printf("✓ Proxy server started on port %d", a.config.GetProxyPort())
+	log.Printf("✓ HTTPS decryption: %v", a.config.GetHTTPSDecrypt())
+	log.Printf("✓ Certificate fingerprint: %s", a.certManager.GetCertFingerprint())
+	
+	log.Println("Starting system tray...")
 	// 启动系统托盘
 	a.systrayManager.Start()
-
+	log.Println("✓ System tray started")
+	
+	log.Println("Starting GUI...")
 	// 运行GUI（阻塞）
 	a.gui.Run()
+	
+	log.Println("GUI closed, application shutting down...")
 }
