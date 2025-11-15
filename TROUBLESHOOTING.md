@@ -71,7 +71,64 @@ build.bat
 
 ---
 
-### 问题 2: cgo: C compiler "gcc" not found
+### 问题 2: GCC 在 Cursor/VS Code 终端中无法识别
+
+**症状**:
+- 在 Windows 自带终端（cmd/PowerShell）中 `gcc --version` 正常
+- 在 Cursor/VS Code 集成终端中显示：
+  ```
+  'gcc' is not recognized as an internal or external command
+  ```
+
+**原因**: 
+- Cursor/VS Code 在启动时读取环境变量
+- 如果在 IDE 启动后才安装 GCC，IDE 的终端不会自动更新 PATH
+
+**解决方案**:
+
+**方案 A - 重启 Cursor（推荐）**:
+1. 完全关闭 Cursor（不是只关闭窗口）
+2. 检查任务管理器，确保没有 Cursor 进程
+3. 重新打开 Cursor
+4. 在终端中测试：`gcc --version`
+
+**方案 B - 临时设置 PATH**:
+```bash
+# 在 Cursor 终端中执行（根据实际路径修改）
+set PATH=%PATH%;C:\TDM-GCC-64\bin
+
+# 验证
+gcc --version
+```
+
+**方案 C - 使用 Windows 终端**:
+```bash
+# 打开 Windows 命令提示符
+cd C:\path\to\packet-capture-tool
+build.bat
+```
+
+**验证环境变量**:
+
+运行测试脚本：
+```bash
+test-gcc.bat
+```
+
+或手动检查：
+```bash
+# 查看 PATH
+echo %PATH%
+
+# 查找 GCC
+where gcc
+
+# 对比 Windows 终端和 Cursor 终端的输出
+```
+
+---
+
+### 问题 3: cgo: C compiler "gcc" not found
 
 **错误信息**:
 ```
@@ -103,7 +160,7 @@ where gcc
 
 ---
 
-### 问题 3: undefined reference to WinMain
+### 问题 4: undefined reference to WinMain
 
 **错误信息**:
 ```
@@ -128,7 +185,7 @@ go build -ldflags="-H windowsgui" -o packet-capture.exe
 
 ---
 
-### 问题 4: 编译速度很慢
+### 问题 5: 编译速度很慢
 
 **现象**: 首次编译需要 5-10 分钟
 
@@ -155,7 +212,7 @@ go build
 
 ## 运行问题
 
-### 问题 5: 证书安装失败
+### 问题 6: 证书安装失败
 
 **错误信息**:
 ```
@@ -184,7 +241,7 @@ certutil -verifystore Root "Packet Capture Tool Root CA"
 
 ---
 
-### 问题 6: 无法捕获 HTTPS 流量
+### 问题 7: 无法捕获 HTTPS 流量
 
 **现象**: HTTP 请求可以看到，但 HTTPS 请求为空或失败
 
@@ -212,7 +269,7 @@ certutil -verifystore Root "Packet Capture Tool Root CA"
 
 ---
 
-### 问题 7: 代理端口被占用
+### 问题 8: 代理端口被占用
 
 **错误信息**:
 ```
@@ -241,7 +298,7 @@ taskkill /PID <PID> /F
 
 ---
 
-### 问题 8: 浏览器显示证书错误
+### 问题 9: 浏览器显示证书错误
 
 **现象**: 浏览器提示 "您的连接不是私密连接" 或类似警告
 
@@ -266,7 +323,7 @@ taskkill /PID <PID> /F
 
 ---
 
-### 问题 9: 系统代理设置不生效
+### 问题 10: 系统代理设置不生效
 
 **现象**: 启用代理后，浏览器流量没有经过代理
 
@@ -294,7 +351,7 @@ Firefox 不使用系统代理，需要单独配置：
 
 ---
 
-### 问题 10: 程序崩溃或无响应
+### 问题 11: 程序崩溃或无响应
 
 **现象**: 程序运行一段时间后崩溃或卡死
 
@@ -327,7 +384,7 @@ Firefox 不使用系统代理，需要单独配置：
 
 ## 性能问题
 
-### 问题 11: 网络速度变慢
+### 问题 12: 网络速度变慢
 
 **原因**: 代理会增加一定延迟
 
@@ -347,7 +404,7 @@ Firefox 不使用系统代理，需要单独配置：
 
 ---
 
-### 问题 12: 内存占用过高
+### 问题 13: 内存占用过高
 
 **现象**: 程序占用几百 MB 内存
 
@@ -374,7 +431,7 @@ Firefox 不使用系统代理，需要单独配置：
 
 ## 其他问题
 
-### 问题 13: 杀毒软件报警
+### 问题 14: 杀毒软件报警
 
 **现象**: Windows Defender 或其他杀毒软件提示威胁
 
@@ -392,7 +449,7 @@ Firefox 不使用系统代理，需要单独配置：
 
 ---
 
-### 问题 14: 某些应用程序的流量抓不到
+### 问题 15: 某些应用程序的流量抓不到
 
 **原因**: 某些应用不使用系统代理
 
