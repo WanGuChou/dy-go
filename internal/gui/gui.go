@@ -205,26 +205,61 @@ func (g *GUI) createRequestArea() fyne.CanvasObject {
 	return container.NewBorder(header, nil, nil, nil, g.requestList)
 }
 
-// filterRequests 过滤请求
+// filterRequests 过滤请求（线程安全版本）
 func (g *GUI) filterRequests(keyword string) {
+	var requests []*storage.CapturedRequest
 	if keyword == "" {
-		g.filteredRequests = g.storage.GetAll()
+		requests = g.storage.GetAll()
 	} else {
-		g.filteredRequests = g.storage.Search(keyword)
+		requests = g.storage.Search(keyword)
 	}
-	g.requestList.Refresh()
-	g.updateStatus()
+	
+	// 在主线程更新 GUI
+	if g.app != nil {
+		g.app.Driver().DoEventually(func() {
+			g.filteredRequests = requests
+			g.requestList.Refresh()
+			g.updateStatus()
+		})
+	} else {
+		// 如果 app 还未初始化，直接更新
+		g.filteredRequests = requests
+		g.requestList.Refresh()
+		g.updateStatus()
+	}
 }
 
 // refreshLoop 定期刷新界面
 func (g *GUI) refreshLoop() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-
+	
 	for range ticker.C {
-		// 如果有搜索关键词，重新过滤
+		// 使用 Fyne 的主线程来更新 GUI
 		keyword := g.searchEntry.Text
-		g.filterRequests(keyword)
+		
+		// 在后台获取数据
+		if keyword == "" {
+			requests := g.storage.GetAll()
+			// 在主线程更新 GUI
+			g.updateRequestsInMainThread(requests)
+		} else {
+			requests := g.storage.Search(keyword)
+			// 在主线程更新 GUI
+			g.updateRequestsInMainThread(requests)
+		}
+	}
+}
+
+// updateRequestsInMainThread 在主线程中更新请求列表
+func (g *GUI) updateRequestsInMainThread(requests []*storage.CapturedRequest) {
+	// 使用 Fyne 的 Do 确保在主线程中执行
+	if g.app != nil {
+		g.app.Driver().DoEventually(func() {
+			g.filteredRequests = requests
+			g.requestList.Refresh()
+			g.updateStatus()
+		})
 	}
 }
 

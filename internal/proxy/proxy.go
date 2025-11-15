@@ -150,14 +150,6 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request, startTime t
 		return
 	}
 
-	// 建立到目标服务器的连接
-	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
-	if err != nil {
-		http.Error(w, "Failed to connect to target", http.StatusBadGateway)
-		return
-	}
-	defer destConn.Close()
-
 	// 劫持客户端连接
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
@@ -175,30 +167,67 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request, startTime t
 	// 发送200 Connection Established响应
 	clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 
+	// 设置读写超时
+	clientConn.SetDeadline(time.Now().Add(60 * time.Second))
+
 	// 使用我们的证书进行TLS握手
 	tlsConfig := s.certManager.GetTLSConfig()
 	tlsClientConn := tls.Server(clientConn, tlsConfig)
 	defer tlsClientConn.Close()
 
+	// 设置握手超时
+	tlsClientConn.SetDeadline(time.Now().Add(10 * time.Second))
+	
 	if err := tlsClientConn.Handshake(); err != nil {
-		log.Printf("TLS handshake failed: %v", err)
+		// TLS握手失败通常是正常的（客户端关闭连接等），不需要详细日志
 		return
 	}
 
-	// 读取客户端的HTTP请求
+	// 重置超时
+	tlsClientConn.SetDeadline(time.Now().Add(60 * time.Second))
+
+	// 持续读取和处理多个HTTP请求（HTTP持久连接）
 	reader := bufio.NewReader(tlsClientConn)
-	req, err := http.ReadRequest(reader)
-	if err != nil {
-		log.Printf("Failed to read HTTPS request: %v", err)
-		return
+	
+	for {
+		// 每次读取前重置超时
+		tlsClientConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		
+		req, err := http.ReadRequest(reader)
+		if err != nil {
+			// EOF 和超时是正常的连接关闭，不需要记录错误
+			if err != io.EOF && !isTimeoutError(err) {
+				log.Printf("Failed to read HTTPS request: %v", err)
+			}
+			return
+		}
+
+		// 构建完整的URL
+		req.URL.Scheme = "https"
+		req.URL.Host = r.Host
+
+		// 处理HTTPS请求
+		s.handleDecryptedHTTPS(tlsClientConn, req, r.Host, startTime)
+		
+		// 如果是 HTTP/1.0 或者客户端要求关闭连接
+		if req.ProtoMajor == 1 && req.ProtoMinor == 0 {
+			return
+		}
+		if strings.ToLower(req.Header.Get("Connection")) == "close" {
+			return
+		}
 	}
+}
 
-	// 构建完整的URL
-	req.URL.Scheme = "https"
-	req.URL.Host = r.Host
-
-	// 处理HTTPS请求（类似HTTP）
-	s.handleDecryptedHTTPS(tlsClientConn, req, r.Host, startTime)
+// isTimeoutError 检查是否是超时错误
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if netErr, ok := err.(net.Error); ok {
+		return netErr.Timeout()
+	}
+	return false
 }
 
 // handleDecryptedHTTPS 处理解密后的HTTPS请求
@@ -211,26 +240,38 @@ func (s *Server) handleDecryptedHTTPS(clientConn net.Conn, r *http.Request, host
 		r.Body = io.NopCloser(bytes.NewReader(reqBody))
 	}
 
-	// 创建到目标服务器的TLS连接
-	targetConn, err := tls.Dial("tcp", host, &tls.Config{
-		InsecureSkipVerify: true, // 在生产环境中应该验证证书
-	})
+	// 使用 HTTP 客户端发送请求（支持连接池和keep-alive）
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			// 禁用压缩，避免内容被修改
+			DisableCompression: true,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Timeout: 30 * time.Second,
+	}
+
+	// 创建新的请求
+	targetURL := "https://" + host + r.RequestURI
+	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(reqBody))
 	if err != nil {
-		log.Printf("Failed to connect to target server: %v", err)
+		log.Printf("Failed to create proxy request: %v", err)
+		// 发送错误响应
+		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 		return
 	}
-	defer targetConn.Close()
 
-	// 发送请求到目标服务器
-	if err := r.Write(targetConn); err != nil {
-		log.Printf("Failed to write request to target: %v", err)
-		return
-	}
+	// 复制请求头
+	copyHeaders(proxyReq.Header, r.Header)
 
-	// 读取响应
-	resp, err := http.ReadResponse(bufio.NewReader(targetConn), r)
+	// 发送请求
+	resp, err := client.Do(proxyReq)
 	if err != nil {
-		log.Printf("Failed to read response from target: %v", err)
+		log.Printf("Failed to proxy HTTPS request: %v", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -238,12 +279,21 @@ func (s *Server) handleDecryptedHTTPS(clientConn net.Conn, r *http.Request, host
 	// 读取响应体
 	respBody, _ := io.ReadAll(resp.Body)
 
-	// 将响应发送回客户端
-	resp.Body = io.NopCloser(bytes.NewReader(respBody))
-	if err := resp.Write(clientConn); err != nil {
-		log.Printf("Failed to write response to client: %v", err)
-		return
+	// 构造响应并发送回客户端
+	// 写入状态行
+	statusLine := fmt.Sprintf("HTTP/%d.%d %d %s\r\n", resp.ProtoMajor, resp.ProtoMinor, resp.StatusCode, resp.Status)
+	clientConn.Write([]byte(statusLine))
+
+	// 写入响应头
+	for key, values := range resp.Header {
+		for _, value := range values {
+			clientConn.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value)))
+		}
 	}
+	clientConn.Write([]byte("\r\n"))
+
+	// 写入响应体
+	clientConn.Write(respBody)
 
 	// 记录请求
 	s.logRequest(r, resp, reqBody, respBody, resp.StatusCode, startTime)
