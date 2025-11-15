@@ -117,7 +117,14 @@ func (g *GUI) createConfigArea() fyne.CanvasObject {
 			g.onClearRequests()
 		}
 		g.filteredRequests = make([]*storage.CapturedRequest, 0)
+	})
+	
+	// 刷新按钮 - 手动刷新列表
+	refreshBtn := widget.NewButton("刷新列表", func() {
+		keyword := g.searchEntry.Text
+		g.filterRequests(keyword)
 		g.requestList.Refresh()
+		g.updateStatus()
 	})
 
 	return container.NewVBox(
@@ -126,6 +133,7 @@ func (g *GUI) createConfigArea() fyne.CanvasObject {
 			layout.NewSpacer(),
 			httpsCheck,
 			reinstallCertBtn,
+			refreshBtn,
 			clearBtn,
 		),
 	)
@@ -134,11 +142,15 @@ func (g *GUI) createConfigArea() fyne.CanvasObject {
 // createSearchArea 创建搜索区域
 func (g *GUI) createSearchArea() fyne.CanvasObject {
 	g.searchEntry = widget.NewEntry()
-	g.searchEntry.SetPlaceHolder("搜索: URL、Host、Method、Headers、Body...")
+	g.searchEntry.SetPlaceHolder("搜索: URL、Host、Method、Headers、Body... (输入后点击'刷新列表')")
 	g.searchEntry.OnChanged = func(keyword string) {
-		g.filterRequests(keyword)
+		// 仅更新数据，不刷新 GUI
+		// 用户需要点击"刷新列表"按钮来更新显示
+		go func() {
+			g.filterRequests(keyword)
+		}()
 	}
-
+	
 	return container.NewBorder(nil, nil, widget.NewLabel("🔍"), nil, g.searchEntry)
 }
 
@@ -205,41 +217,43 @@ func (g *GUI) createRequestArea() fyne.CanvasObject {
 	return container.NewBorder(header, nil, nil, nil, g.requestList)
 }
 
-// filterRequests 过滤请求
+// filterRequests 过滤请求（仅更新数据，不刷新 GUI）
 func (g *GUI) filterRequests(keyword string) {
 	if keyword == "" {
 		g.filteredRequests = g.storage.GetAll()
 	} else {
 		g.filteredRequests = g.storage.Search(keyword)
 	}
-	
-	// Fyne 的 Refresh 是线程安全的，可以直接调用
-	g.requestList.Refresh()
-	g.updateStatus()
 }
 
-// refreshLoop 定期刷新界面
+// refreshLoop 定期刷新界面（停止自动刷新以避免线程问题）
 func (g *GUI) refreshLoop() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	// 注释掉自动刷新，改为按需刷新
+	// 自动刷新会导致 Fyne 线程错误
 	
-	for range ticker.C {
-		// 重新过滤请求（Fyne 的 Refresh 是线程安全的）
-		keyword := g.searchEntry.Text
-		g.filterRequests(keyword)
-	}
+	// ticker := time.NewTicker(1 * time.Second)
+	// defer ticker.Stop()
+	
+	// for range ticker.C {
+	// 	keyword := g.searchEntry.Text
+	// 	g.filterRequests(keyword)
+	// }
 }
 
-// updateStatus 更新状态栏
+// updateStatus 更新状态栏（不刷新 GUI）
 func (g *GUI) updateStatus() {
 	total := g.storage.Count()
 	filtered := len(g.filteredRequests)
-
+	
+	var statusText string
 	if filtered == total {
-		g.statusLabel.SetText(fmt.Sprintf("总请求数: %d", total))
+		statusText = fmt.Sprintf("总请求数: %d (点击'刷新列表'查看最新)", total)
 	} else {
-		g.statusLabel.SetText(fmt.Sprintf("显示: %d / 总数: %d", filtered, total))
+		statusText = fmt.Sprintf("显示: %d / 总数: %d (点击'刷新列表'查看最新)", filtered, total)
 	}
+	
+	// 直接设置文本，不触发刷新
+	g.statusLabel.Text = statusText
 }
 
 // Show 显示窗口
